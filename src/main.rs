@@ -10,7 +10,7 @@ trait Command {
 
 struct NullCmd {}
 impl NullCmd {
-    fn new(args: Option<String>) -> Self {
+    fn new() -> Self {
         NullCmd {}
     }
 }
@@ -35,6 +35,28 @@ impl Command for PingCmd {
     }
 }
 
+enum Cmd {
+    Ping,
+    Null,
+}
+struct Command2 {
+    raw_commands: HashMap<String, Cmd>,
+}
+impl Command2 {
+    fn new() -> Self {
+        Command2 {
+            raw_commands: HashMap::from([("ping".to_string(), Cmd::Ping)]),
+        }
+    }
+
+    fn one_by(&self, a_cmd_name: &str, args: Option<String>) -> Box<dyn Command> {
+        match self.raw_commands.get(a_cmd_name).unwrap_or(&Cmd::Null) {
+            Cmd::Ping => Box::new(PingCmd::new(args)),
+            Cmd::Null => Box::new(NullCmd::new()),
+        }
+    }
+}
+
 struct Commands {
     raw_commands: HashMap<String, Box<dyn Command>>,
     null_cmd: Box<dyn Command>,
@@ -52,26 +74,17 @@ impl Commands {
     }
 
     fn default_cmd() -> Box<dyn Command> {
-        Box::new(NullCmd::new(None))
+        Box::new(NullCmd::new())
     }
 }
 impl Default for Commands {
     fn default() -> Self {
         let mut raw_commands: HashMap<String, Box<dyn Command>> = HashMap::new();
-        // TODO: ver como solucionar el paso de args al comando, ya que no tiene
-        // sentido pasarlos acá.
-        //_ 1. se podrían pasar en el execute?
-        //_ 2. se podrían setear?
-        //_ 3. otra?
-        // Hasta ahora me gusta mas la 1, la segunda me suena a builder
         raw_commands.insert(
             "ping".to_string(),
             Box::new(PingCmd::new(Some("--a".to_string()))),
         );
-        raw_commands.insert(
-            "null".to_string(),
-            Box::new(NullCmd::new(Some("--a".to_string()))),
-        );
+        raw_commands.insert("null".to_string(), Box::new(NullCmd::new()));
         Commands {
             raw_commands,
             null_cmd: Self::default_cmd(),
@@ -89,15 +102,22 @@ mod tests {
             "ping".to_string(),
             Box::new(PingCmd::new(Some("--a".to_string()))),
         );
-        commands.insert(
-            "other".to_string(),
-            Box::new(NullCmd::new(Some("--a".to_string()))),
-        );
+        commands.insert("other".to_string(), Box::new(NullCmd::new()));
         commands
     }
 
     fn execute_command<T: Command>(cmd: &T) -> Result<(), &str> {
         cmd.execute()
+    }
+
+    #[test]
+    fn command2_new() {
+        let command2 = Command2::new();
+
+        assert!(command2
+            .one_by("ping", Some("".to_string()))
+            .execute()
+            .is_err());
     }
 
     #[test]
@@ -134,7 +154,7 @@ mod tests {
 
         // Insert commands into the map
         let ping_command = Box::new(PingCmd::new(Some("--a".to_string())));
-        let other_command = Box::new(NullCmd::new(Some("--b".to_string())));
+        let other_command = Box::new(NullCmd::new());
 
         command_map.insert("ping".to_string(), ping_command);
         command_map.insert("other".to_string(), other_command);
